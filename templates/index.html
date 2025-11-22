@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hangman Web Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Base Tailwind setup */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7e6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+        }
+
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 800px;
+            height: 100%;
+        }
+
+        #hangman-image {
+            max-height: 250px;
+            width: auto;
+            margin: 0 auto;
+            transition: all 0.3s ease;
+        }
+
+        #word-display {
+            font-size: 3.5rem;
+            margin: 20px 0;
+            letter-spacing: 15px;
+            font-weight: bold;
+            color: #333;
+            min-height: 60px;
+        }
+
+        .keyboard-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 20px;
+            padding-bottom: 20px;
+        }
+
+        .letter-button {
+            background: none; 
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            line-height: 0; 
+            transition: transform 0.1s;
+        }
+
+        .letter-button:active {
+            transform: scale(0.95);
+        }
+
+        .letter-button img {
+            width: 40px;
+            height: auto;
+            transition: opacity 0.1s;
+            filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.1));
+        }
+        
+        .letter-button:disabled img {
+            opacity: 0.3; 
+            cursor: not-allowed;
+            filter: grayscale(100%);
+        }
+
+        @media (max-width: 600px) {
+            #word-display {
+                font-size: 2.5rem;
+                letter-spacing: 10px;
+            }
+            .letter-button img {
+                width: 35px;
+            }
+            #hangman-image {
+                max-height: 200px;
+            }
+        }
+    </style>
+</head>
+<body class="p-4">
+    
+    <div id="game-container">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-center w-full max-w-lg mb-4 p-2 border-b-2 border-gray-300">
+            <h1 class="text-2xl font-extrabold text-gray-800 tracking-wider">HANGMAN</h1>
+            <div id="score" class="text-xl font-bold text-green-700">SCORE: 0</div>
+        </div>
+
+        <!-- Hangman Display -->
+        <div id="hangman-display-container" class="my-4 flex flex-col items-center">
+            <img id="hangman-image" src="" alt="Hangman Progress" class="mb-4">
+            <div id="error-text" class="text-lg text-red-600 font-semibold">Errors: 0/6</div>
+        </div>
+
+        <!-- Word Display Area -->
+        <div id="word-display" class="w-full text-center"></div>
+
+        <!-- Message Box and Restart Button -->
+        <div class="flex flex-col items-center w-full my-4">
+            <div id="message-box" class="min-h-[30px] text-lg font-medium text-gray-700 mb-4">Game started. Good luck!</div>
+            
+            <button id="restart-button" onclick="restartGame()" class="hidden py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition duration-150">
+                Play Again
+            </button>
+        </div>
+
+        <!-- Keyboard -->
+        <div class="keyboard-grid" id="keyboard-container"></div>
+
+    </div>
+
+    <script>
+        let isGameOver = false;
+        
+        // URL Configuration: 
+        // We REMOVED the hardcoded BACKEND_URL. 
+        // Using relative paths ('/guess') automatically connects to the correct server,
+        // whether it's Localhost or Render.
+        
+        const BASE_IMG_URLS = {
+            letters: '/static/letters png img/',
+            hangman: '/static/hangman png img/'
+        };
+
+        function createKeyboard() {
+            const letters = 'abcdefghijklmnopqrstuvwxyz';
+            const keyboardContainer = document.getElementById('keyboard-container');
+            keyboardContainer.innerHTML = ''; 
+            
+            letters.split('').forEach(letter => {
+                const button = document.createElement('button');
+                button.className = 'letter-button';
+                button.id = 'btn-' + letter;
+                button.onclick = () => guessLetter(letter, button.id);
+                
+                const image = document.createElement('img');
+                image.src = `${BASE_IMG_URLS.letters}${letter}.png`; 
+                image.alt = letter.toUpperCase();
+                
+                button.appendChild(image);
+                keyboardContainer.appendChild(button);
+            });
+        }
+        
+        function guessLetter(letter, buttonId) {
+            if (isGameOver) {
+                document.getElementById('message-box').textContent = "Game Over! Click 'Play Again' to continue.";
+                return;
+            }
+            
+            document.getElementById(buttonId).disabled = true;
+
+            // CHANGED: Using relative path '/guess' instead of full URL
+            fetch('/guess', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ letter: letter }),
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('Server error: ' + response.status);
+                return response.json();
+            })
+            .then(data => updateGame(data))
+            .catch((error) => {
+                console.error('Fetch Error:', error);
+                // Changed alert to be more helpful
+                alert('Connection error. If you are testing locally, make sure python app.py is running.'); 
+            });
+        }
+
+        function restartGame() {
+            // CHANGED: Using relative path '/restart' instead of full URL
+            fetch('/restart', {
+                method: 'POST',
+                credentials: 'include',
+            })
+            .then(response => response.json())
+            .then(data => {
+                isGameOver = false;
+                document.querySelectorAll('.letter-button').forEach(btn => btn.disabled = false);
+                document.getElementById('restart-button').classList.add('hidden');
+                updateGame(data);
+            })
+            .catch((error) => {
+                console.error('Fetch Error:', error);
+                alert('Could not connect to server. Make sure app.py is running!'); 
+            });
+        }
+
+        function updateGame(data) {
+            document.getElementById('word-display').textContent = data.display_word;
+            document.getElementById('score').textContent = 'SCORE: ' + data.score;
+            document.getElementById('message-box').textContent = data.message;
+            
+            const imagePath = `${BASE_IMG_URLS.hangman}${data.hangman_img}.png`;
+            document.getElementById('hangman-image').src = imagePath;
+            document.getElementById('error-text').textContent = `Errors: ${data.incorrect_count}/6`;
+
+            document.querySelectorAll('.letter-button').forEach(btn => {
+                const letter = btn.id.replace('btn-', ''); 
+                if (data.guessed_letters.includes(letter)) {
+                    btn.disabled = true;
+                }
+            });
+            
+            if (data.game_over) {
+                isGameOver = true;
+                document.getElementById('restart-button').classList.remove('hidden');
+                document.querySelectorAll('.letter-button').forEach(btn => {
+                    if (!btn.disabled) btn.disabled = true;
+                });
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            createKeyboard(); 
+            restartGame(); 
+        });
+    </script>
+</body>
+</html>
